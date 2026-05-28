@@ -1,0 +1,6 @@
+services:
+  outage-detection:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
