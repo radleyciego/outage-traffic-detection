@@ -9,6 +9,7 @@ venv/
 
 # Notebooks
 .ipynb_checkpoints/
+notebooks/cache/
 
 # Data (track nothing under data/ — too large or pending access)
 data/raw/*
