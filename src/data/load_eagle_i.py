@@ -9,13 +9,41 @@ Spatial resolution: County (FIPS code).
 
 import os
 import pandas as pd
-import geopandas as gpd
 import requests
+import logging
 from pathlib import Path
 from typing import Optional
-from datetime import datetime, timedelta
+
+from src.utils.quality import (
+    check_value_range,
+    check_temporal_gaps,
+    check_column_types,
+)
+
+logger = logging.getLogger(__name__)
 
 EAGLE_I_API = "https://eagle-i.ornl.gov/api/v2"
+
+
+def _run_quality_checks(df: pd.DataFrame, label: str) -> None:
+    """Run standard quality checks on an EAGLE-I DataFrame."""
+    df = df.sort_values("timestamp")
+
+    check_column_types(df, {
+        "timestamp": "datetime64",
+        "fips": "object",
+        "customers_out": "int",
+        "customers_total": "int",
+    }, name=label)
+
+    check_value_range(df, "customers_out", 0, 1_000_000, name=label)
+
+    invalid = df["customers_out"] > df["customers_total"]
+    n_invalid = invalid.sum()
+    if n_invalid:
+        logger.warning(f"{label}: {n_invalid} rows with customers_out > customers_total")
+
+    check_temporal_gaps(df, "timestamp", expected_freq="15min", name=label)
 
 
 def fetch_eagle_i(
@@ -78,11 +106,14 @@ def fetch_eagle_i(
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.sort_values(["fips", "timestamp"]).reset_index(drop=True)
 
+    _run_quality_checks(df, "eagle_i_api")
+
     if cache_dir:
         os.makedirs(cache_dir, exist_ok=True)
         fips_str = "_".join(fips_codes)
         path = os.path.join(cache_dir, f"eagle_i_{fips_str}_{start_date}_{end_date}.parquet")
         df.to_parquet(path, index=False)
+        logger.info(f"Cached {len(df)} EAGLE-I records to {path}")
 
     return df
 
@@ -118,4 +149,8 @@ def load_eagle_i_local(
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    return df.sort_values(["fips", "timestamp"]).reset_index(drop=True)
+    df = df.sort_values(["fips", "timestamp"]).reset_index(drop=True)
+
+    _run_quality_checks(df, path_obj.stem)
+
+    return df

@@ -7,9 +7,13 @@ Core operations:
 """
 
 import geopandas as gpd
-import pandas as pd
 import osmnx as ox
+import logging
 from typing import Optional
+
+from src.utils.quality import check_crs
+
+logger = logging.getLogger(__name__)
 
 ROAD_HIERARCHY = {
     "motorway": "arterial",
@@ -39,17 +43,20 @@ def classify_road_hierarchy(highway_tag) -> str:
 def nearest_link_join(
     points: gpd.GeoDataFrame,
     lines: gpd.GeoDataFrame,
+    max_distance_m: float = 500,
 ) -> gpd.GeoDataFrame:
     """Join each point to its nearest line, returning point geometry with
     joined line attributes and distance.
 
     Uses geopandas.sjoin_nearest with spatial indexing (R-tree).
-    This is O(n log m) instead of O(n * m) for a naive loop.
+    Logs a warning for points with no match within max_distance_m.
 
     Parameters
     ----------
     points : GeoDataFrame (Point geometry)
     lines : GeoDataFrame (LineString geometry)
+    max_distance_m : float
+        Threshold beyond which a warning is logged
 
     Returns
     -------
@@ -57,7 +64,13 @@ def nearest_link_join(
     and a 'distance_m' column.
     """
     if points.crs != lines.crs:
+        logger.info(
+            f"Reprojecting lines from {lines.crs} to {points.crs}"
+        )
         lines = lines.to_crs(points.crs)
+
+    check_crs(points, name="points")
+    check_crs(lines, name="lines")
 
     joined = gpd.sjoin_nearest(
         points,
@@ -65,6 +78,14 @@ def nearest_link_join(
         how="left",
         distance_col="distance_m",
     )
+
+    far = joined["distance_m"] > max_distance_m
+    n_far = far.sum()
+    if n_far:
+        logger.warning(
+            f"{n_far} points have nearest link >{max_distance_m}m away "
+            f"(max: {joined['distance_m'].max():.0f}m)"
+        )
 
     side_cols = [c for c in joined.columns if c.endswith("_right")]
     for c in side_cols:
@@ -107,6 +128,11 @@ def load_county_boundary(
 
     place = f"{info['county']}, {info['state']}, USA"
     gdf = ox.geocode_to_gdf(place)
+
+    invalid = ~gdf.geometry.is_valid
+    if invalid.any():
+        logger.warning(f"County boundary has {invalid.sum()} invalid geometries, fixing")
+        gdf.geometry = gdf.geometry.buffer(0)
 
     if path:
         gdf.to_parquet(path)
