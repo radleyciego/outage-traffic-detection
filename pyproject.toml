@@ -1,0 +1,23 @@
+[project]
+name = "outage-traffic-detection"
+version = "0.1.0"
+description = "Passive power outage detection via GPS probe vehicle data"
+requires-python = ">=3.11"
+dependencies = [
+    "geopandas>=1.0,<2",
+    "osmnx>=2.0,<3",
+    "pyarrow>=14,<19",
+    "duckdb>=1.0,<2",
+    "shapely>=2.0,<3",
+    "scikit-learn>=1.5,<2",
+    "xgboost>=2.0,<3",
+    "matplotlib>=3.8,<4",
+    "seaborn>=0.13,<1",
+    "contextily>=1.5,<2",
+    "requests>=2.31,<3",
+    "tqdm>=4.66,<5",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
