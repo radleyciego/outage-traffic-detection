@@ -131,7 +131,7 @@ def load_road_network(
     check_no_null_geometries(edges, f"roads_{county_key}")
 
     edges = normalize_list_columns(edges)
-    check_no_duplicates(edges, subset=["osmid"], name=f"roads_{county_key}")
+    check_no_duplicates(edges, subset=["geometry"], name=f"roads_{county_key}")
 
     if path:
         edges.to_parquet(path)
