@@ -6,7 +6,7 @@ Mechanism: Power outages -> traffic signals go dark -> drivers exhibit measurabl
 
 Institutional affiliation: CUNY Hunter College / Oak Ridge National Laboratory (ORNL)
 
-Project status: Data acquisition and exploratory analysis phase. No data collected yet. No scripts written yet. Literature review and methodology are fully defined.
+Project status: Phase 1 (spatial setup) complete — OSM intersections + road network loaded and joined for Harris County, TX. Phase 2+ code written but awaiting EAGLE-I and NPMRDS data access.
 
 ## Datasets
 
@@ -49,11 +49,11 @@ Note on weather events: Major named storms (Beryl, Uri, Harvey) are excluded fro
 
 ## Methodology
 
-### Phase 1 - Spatial Setup
+### Phase 1 - Spatial Setup (complete)
 - Pull signalized intersection locations from OSM using osmnx for target counties
-- Spatially join intersections to road links (nearest-link join)
+- Spatially join intersections to road links (nearest-link join with R-tree)
 - Classify intersections by road hierarchy (arterial vs. collector vs. local)
-- Store outputs as GeoParquet
+- Store outputs as GeoParquet with GeoParquet caching for instant re-reads
 
 ### Phase 2 - Outage Event Selection
 - Load EAGLE-I records for Harris and Travis counties
@@ -83,7 +83,14 @@ Note on weather events: Major named storms (Beryl, Uri, Harvey) are excluded fro
 ## Tech Stack
 
 Languages: Python, SQL (DuckDB)
-Core: pandas, geopandas, osmnx, shapely, pyarrow, duckdb, scikit-learn, xgboost
+
+Core libraries: pandas, geopandas, osmnx, shapely, pyarrow, duckdb, scikit-learn, xgboost
+
+Build tooling: uv (package manager), pyproject.toml (dependencies), uv.lock (pinned versions)
+
+Deployment: Docker (optional) — python:3.12-slim + GDAL + uv multi-stage build
+
+Data quality: All data loaders run standardized checks through src/utils/quality.py — geometry validity, coordinate ranges, temporal gaps, value bounds, column type consistency
 
 ## File & Data Conventions
 
@@ -91,10 +98,72 @@ Core: pandas, geopandas, osmnx, shapely, pyarrow, duckdb, scikit-learn, xgboost
 - GeoParquet for all spatial data (geopandas + pyarrow)
 - GeoJSON for small reference files only
 - CSV for raw source data ingestion only; convert immediately to Parquet
+- Cached data lives in `data/raw/{source}/` — always check cache first, auto-rebuild on miss or corruption
 - Files: snake_case, include county/state, e.g. `eagle_i_harris_tx_2024.parquet`
 - Variables: snake_case
 - Functions: snake_case, verb-first (load_eagle_i(), extract_features())
 - Classes: PascalCase
+
+## Running Conventions
+
+- Run scripts as modules: `python -m src.data.load_osm` (NOT `python src/data/load_osm.py` — this breaks relative imports)
+- Inside Docker: `docker compose run --rm outage-detection python -m src.data.load_osm`
+- Dependencies managed via uv: `uv sync` to install, `uv add <pkg>` for new ones
+- Jupyter notebooks use `sys.path.insert(0, "..")` at the top to find the `src/` package
+
+## Data Quality Rules
+
+- `normalize_list_columns()` must run before any Parquet write — OSM data mixes list/scalar types in columns like osmid, highway, name; PyArrow cannot serialize mixed types
+- `check_no_null_geometries()` — hard fail, spatial data is useless without geometry
+- `check_no_duplicates(subset=["geometry"])` — use geometry, not osmid (OSM splits ways at intersections, osmid repeats across edges)
+- Geometry column is skipped by normalize_list_columns by default — it is already well-typed
+- EAGLE-I checks: `customers_out <= customers_total`, no negative values, detect gaps in 15-min time series
+
+## Project Directory Structure
+
+```
+outage-traffic-detection/
+├── CLAUDE.md
+├── README.md
+├── .gitignore
+├── .python-version          # Python 3.12
+├── pyproject.toml            # Dependencies (uv)
+├── uv.lock                   # Pinned lock file
+├── Dockerfile                # Optional container
+├── docker-compose.yml
+├── .dockerignore
+├── data/
+│   ├── raw/                  # Untouched source data
+│   │   ├── eagle_i/
+│   │   ├── npmrds/
+│   │   └── osm/              # Cached OSM GeoParquet
+│   ├── processed/            # Cleaned, joined, feature-engineered
+│   └── outputs/              # Model results, figures, exports
+├── notebooks/
+│   ├── 01_osm_intersections.ipynb
+│   ├── 02_eagle_i_exploration.ipynb
+│   ├── 03_npmrds_feature_engineering.ipynb
+│   └── 04_classification_model.ipynb
+├── src/
+│   ├── __init__.py
+│   ├── data/
+│   │   ├── __init__.py
+│   │   ├── load_eagle_i.py
+│   │   ├── load_npmrds.py          # Placeholder (pending access)
+│   │   └── load_osm.py
+│   ├── features/
+│   │   ├── __init__.py
+│   │   └── extract_traffic_features.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── train_classifier.py
+│   └── utils/
+│       ├── __init__.py
+│       ├── quality.py              # Data quality checks
+│       └── spatial_utils.py
+└── reports/
+    └── figures/
+```
 
 ## Critical Research Context
 
