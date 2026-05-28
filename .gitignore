@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data (track nothing under data/ — too large or pending access)
+data/raw/*
+data/processed/*
+data/outputs/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/outputs/.gitkeep
+
+# Reports (track figures, not generated PDFs)
+reports/figures/*
+!reports/figures/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env.local
