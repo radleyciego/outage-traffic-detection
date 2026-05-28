@@ -72,7 +72,7 @@ def load_intersections(
         gdf = gdf.drop(columns=["element"])
 
     check_no_null_geometries(gdf, f"intersections_{county_key}")
-    check_no_duplicates(gdf, subset=["osmid"], name=f"intersections_{county_key}")
+    check_no_duplicates(gdf, subset=["geometry"], name=f"intersections_{county_key}")
 
     gdf = normalize_list_columns(gdf)
 
@@ -131,6 +131,7 @@ def load_road_network(
     check_no_null_geometries(edges, f"roads_{county_key}")
 
     edges = normalize_list_columns(edges)
+    check_no_duplicates(edges, subset=["osmid"], name=f"roads_{county_key}")
 
     if path:
         edges.to_parquet(path)
