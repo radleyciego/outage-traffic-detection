@@ -128,7 +128,7 @@ def normalize_list_columns(
     DataFrame with mixed-type columns flattened
     """
     df = df.copy()
-    exclude = set(exclude or [])
+    exclude = set(exclude or ["geometry"])
     for col in df.columns:
         if col in exclude:
             continue
